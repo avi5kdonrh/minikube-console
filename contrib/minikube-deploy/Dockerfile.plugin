@@ -1,0 +1,15 @@
+# networking-console-plugin static assets, served by nginx on :8080, for running
+# INSIDE minikube. Built by contrib/minikube-deploy/deploy.sh, which stages the
+# plugin's prebuilt bundle into the build context:
+#
+#   <context>/dist   = <networking-console-plugin>/dist   (prebuilt plugin bundle)
+#
+# The console (bridge) PROXIES plugin assets server-side under /api/plugins/,
+# so this only needs to serve the static files over plain HTTP on the cluster
+# network — no CORS or TLS required. nginx-unprivileged listens on 8080 and runs
+# as a non-root uid out of the box.
+FROM nginxinc/nginx-unprivileged:1.27-alpine
+
+COPY dist /usr/share/nginx/html
+
+EXPOSE 8080

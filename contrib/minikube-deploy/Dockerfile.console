@@ -1,0 +1,29 @@
+# OpenShift console (bridge + prebuilt frontend) as a container, for running
+# INSIDE minikube. Built by contrib/minikube-deploy/deploy.sh, which stages the
+# prebuilt artifacts into the build context:
+#
+#   <context>/bridge   = repo bin/bridge            (prebuilt Go binary)
+#   <context>/static   = frontend/public/dist       (prebuilt frontend bundle)
+#
+# We copy prebuilt artifacts instead of doing a multi-stage build because:
+#   * the upstream Dockerfile's base images live in registry.ci.openshift.org
+#     (not publicly pullable), and
+#   * building the frontend in-container is slow/heavy.
+#
+# bin/bridge is dynamically linked and needs at most GLIBC_2.34, so ubi9-minimal
+# (glibc 2.34, publicly pullable) runs it as-is.
+FROM registry.access.redhat.com/ubi9/ubi-minimal:latest
+
+RUN mkdir -p /opt/bridge/bin /opt/bridge/static
+
+COPY bridge /opt/bridge/bin/bridge
+COPY static /opt/bridge/static
+
+# Runs fine as an arbitrary non-root uid (matches the upstream image).
+USER 1001
+
+EXPOSE 9000
+
+# Everything else (in-cluster mode, disabled auth, the SA bearer token, the
+# plugin list) is supplied via BRIDGE_* env vars in the Deployment.
+CMD ["/opt/bridge/bin/bridge", "--public-dir=/opt/bridge/static"]

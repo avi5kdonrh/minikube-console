@@ -1,0 +1,51 @@
+# A sample Shipwright Build that builds a container image from a Git repo's
+# Dockerfile and pushes it to the in-cluster registry (00-registry.yaml).
+#
+#   kubectl apply -f contrib/minikube-builds/10-sample-build.yaml
+#
+# Then either:
+#   * In the console UI: Builds -> Shipwright -> Builds -> "sample-go-build"
+#     -> Actions -> Start  (creates a BuildRun and runs the build), or
+#   * From the CLI:
+#       kubectl create -n default -f - <<'EOF'
+#       apiVersion: shipwright.io/v1beta1
+#       kind: BuildRun
+#       metadata: { generateName: sample-go-build- }
+#       spec: { build: { name: sample-go-build } }
+#       EOF
+#
+# The built image lands at:
+#   registry.registry.svc.cluster.local:5000/sample-go:latest
+#
+# Notes:
+#   * strategy buildah-shipwright-managed-push: buildah builds the image and
+#     Shipwright's managed-push step pushes it to spec.output.image.
+#   * output.insecure: true  -> push step allows the plain-HTTP registry.
+#   * registries-insecure param -> buildah itself treats the registry as
+#     insecure (covers cache/intermediate pushes).
+#   * storage-driver vfs -> no special host mounts / privileges needed.
+apiVersion: shipwright.io/v1beta1
+kind: Build
+metadata:
+  name: sample-go-build
+  namespace: default
+spec:
+  source:
+    type: Git
+    git:
+      url: https://github.com/shipwright-io/sample-go
+    contextDir: docker-build
+  strategy:
+    name: buildah-shipwright-managed-push
+    kind: ClusterBuildStrategy
+  paramValues:
+    - name: dockerfile
+      value: Dockerfile
+    - name: storage-driver
+      value: vfs
+    - name: registries-insecure
+      values:
+        - value: registry.registry.svc.cluster.local:5000
+  output:
+    image: registry.registry.svc.cluster.local:5000/sample-go:latest
+    insecure: true

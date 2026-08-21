@@ -1,0 +1,45 @@
+# Historically this manifest faked the OpenShift build/image API groups as CRDs
+# so the console's classic "Builds" nav section would render on a native
+# Kubernetes cluster (minikube) that lacks the OpenShift API server.
+#
+#   kubectl apply -f contrib/minikube-openshift-build-crds.yaml
+#
+# REMOVED: the fake `builds.build.openshift.io`, `buildconfigs.build.openshift.io`,
+# `imagestreams.image.openshift.io`, and `imagestreamtags.image.openshift.io`
+# CRDs are GONE. They had no controllers or registry behind them (nothing built),
+# and "Start Build" can never work off-cluster anyway — it needs the
+# buildconfigs/{name}/instantiate aggregated-apiserver subresource. `builds` also
+# collided with the real `builds.shipwright.io` CRD.
+#
+# For REAL, working builds that push images to an in-cluster registry, use
+# Shipwright:  contrib/minikube-builds/setup.sh   (Builds UI is gated by the
+# SHIPWRIGHT_BUILD flag, which flips on once shipwright.io/v1beta1 is served).
+#
+# What's left here: only the ClusterVersion CRD. It provides a ClusterVersion for
+# the console's version/About display. It also contributes to the OPENSHIFT
+# feature flag (detected via /apis/config.openshift.io/v1 having resources),
+# though that group is now also served by the Software Catalog fix
+# (contrib/minikube-openshift-catalog-crds.yaml: infrastructures/authentications),
+# so this CRD is no longer required just for the flag. Apply a `version` instance
+# separately if you want a populated cluster version.
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: clusterversions.config.openshift.io
+spec:
+  group: config.openshift.io
+  scope: Cluster
+  names:
+    plural: clusterversions
+    singular: clusterversion
+    kind: ClusterVersion
+    listKind: ClusterVersionList
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          x-kubernetes-preserve-unknown-fields: true

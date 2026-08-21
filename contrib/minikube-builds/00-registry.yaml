@@ -1,0 +1,93 @@
+# A lightweight, in-cluster container registry for minikube.
+#
+#   kubectl apply -f contrib/minikube-builds/00-registry.yaml
+#
+# Plain HTTP (no TLS, no auth) — fine for a local dev cluster. Reachable from
+# inside the cluster at:
+#
+#   registry.registry.svc.cluster.local:5000
+#
+# Shipwright build pods push here with `spec.output.insecure: true` (buildah is
+# told to skip TLS verification). Storage is a 10Gi PVC (minikube's default
+# StorageClass), so pushed images survive pod restarts.
+#
+# NOTE: This makes PUSH work. If you later want to RUN a pushed image as a Pod,
+# the node's Docker daemon must also trust this registry — restart minikube with
+#   minikube start --insecure-registry="10.96.0.0/12"
+# (the Service CIDR) so kubelet/Docker can pull over HTTP. Not required just to
+# store images from builds.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: registry
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: registry-data
+  namespace: registry
+spec:
+  accessModes: [ReadWriteOnce]
+  resources:
+    requests:
+      storage: 10Gi
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: registry
+  namespace: registry
+  labels:
+    app: registry
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: registry
+  template:
+    metadata:
+      labels:
+        app: registry
+    spec:
+      containers:
+        - name: registry
+          image: registry:2
+          ports:
+            - containerPort: 5000
+          env:
+            - name: REGISTRY_HTTP_ADDR
+              value: "0.0.0.0:5000"
+            - name: REGISTRY_STORAGE_DELETE_ENABLED
+              value: "true"
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/registry
+          readinessProbe:
+            httpGet:
+              path: /v2/
+              port: 5000
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+      volumes:
+        - name: data
+          persistentVolumeClaim:
+            claimName: registry-data
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: registry
+  namespace: registry
+spec:
+  selector:
+    app: registry
+  ports:
+    - name: registry
+      port: 5000
+      targetPort: 5000
