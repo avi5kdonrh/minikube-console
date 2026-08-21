@@ -11,6 +11,13 @@ export const LazyConfigureNamespacePullSecretModalOverlay = lazy(() =>
   })),
 );
 
+// Lazy-loaded OverlayComponent for Link Pull Secret to ServiceAccount Modal
+export const LazyLinkPullSecretModalOverlay = lazy(() =>
+  import('./link-pull-secret-modal' /* webpackChunkName: "link-pull-secret-modal" */).then((m) => ({
+    default: m.LinkPullSecretModalOverlay,
+  })),
+);
+
 // Lazy-loaded OverlayComponent for Labels Modal
 export const LazyLabelsModalOverlay = lazy(() =>
   import('./labels-modal' /* webpackChunkName: "labels-modal" */).then((m) => ({

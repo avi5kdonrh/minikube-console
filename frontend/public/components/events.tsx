@@ -1,5 +1,5 @@
 import type { ComponentType, FC, ReactNode } from 'react';
-import { useEffect, useState, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Label,
   LabelGroup,
@@ -15,7 +15,6 @@ import { css } from '@patternfly/react-styles';
 import * as _ from 'lodash';
 import { Trans, useTranslation } from 'react-i18next';
 import { Link, useParams } from 'react-router';
-import type { CellMeasurerCache } from 'react-virtualized';
 import type { Action, MenuOption } from '@console/dynamic-plugin-sdk';
 import type {
   K8sResourceCommon,
@@ -63,9 +62,6 @@ interface ExtendedEventKind extends EventKind {
 interface ActionsProps {
   actions: Action[];
   options?: MenuOption[];
-  list?: EventComponentProps['list'];
-  cache: CellMeasurerCache;
-  index: number;
 }
 
 interface InnerProps extends Omit<EventComponentProps, 'event'> {
@@ -150,33 +146,23 @@ const kindFilter = (reference: string, { involvedObject }: EventKind): boolean =
   });
 };
 
-const Actions: FC<ActionsProps> = ({ actions, options, list, cache, index }) => {
-  useEffect(() => {
-    // Actions contents will render after the initial row height calculation,
-    // so recompute the row height.
-    cache.clear(index, 0);
-    list?.recomputeRowHeights(index);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+const Actions: FC<ActionsProps> = ({ actions, options }) => (
+  <div className="co-sysevent__actions">
+    {actions.length === 1 ? (
+      <ActionMenuItem
+        action={actions[0]}
+        component={(props: any) => (
+          // Button is not compatible with DropdownItem but it is close enough to work
+          <Button variant={ButtonVariant.secondary} size={ButtonSize.sm} {...props} />
+        )}
+      />
+    ) : (
+      <ActionMenu actions={actions} options={options} variant={ActionMenuVariant.DROPDOWN} />
+    )}
+  </div>
+);
 
-  return (
-    <div className="co-sysevent__actions">
-      {actions.length === 1 ? (
-        <ActionMenuItem
-          action={actions[0]}
-          component={(props: any) => (
-            // Button is not compatible with DropdownItem but it is close enough to work
-            <Button variant={ButtonVariant.secondary} size={ButtonSize.sm} {...props} />
-          )}
-        />
-      ) : (
-        <ActionMenu actions={actions} options={options} variant={ActionMenuVariant.DROPDOWN} />
-      )}
-    </div>
-  );
-};
-
-const Inner: FC<InnerProps> = ({ event, list, cache, index }) => {
+const Inner: FC<InnerProps> = ({ event }) => {
   const { t } = useTranslation('public');
   const canListNode = useFlag(FLAGS.CAN_LIST_NODE);
   const { involvedObject: obj, source, message, reason, series, reportingComponent } = event;
@@ -262,16 +248,7 @@ const Inner: FC<InnerProps> = ({ event, list, cache, index }) => {
               )}
               <ActionServiceProvider context={{ [referenceFor(event)]: event }}>
                 {({ actions, options, loaded }) =>
-                  loaded &&
-                  actions.length > 0 && (
-                    <Actions
-                      actions={actions}
-                      options={options}
-                      list={list}
-                      cache={cache}
-                      index={index}
-                    />
-                  )
+                  loaded && actions.length > 0 && <Actions actions={actions} options={options} />
                 }
               </ActionServiceProvider>
             </div>
@@ -605,11 +582,16 @@ export const EventStreamPage = withStartGuide(
 const InnerResourceEventStream: FC<InternalResourceEventStreamProps> = ({
   obj: {
     kind,
-    metadata: { name, namespace, uid },
+    metadata: { name, namespace },
   },
 }) => (
+  // Match on name + kind only (scoped by the namespaced endpoint). We intentionally
+  // omit `involvedObject.uid`: events retain the uid of the incarnation that emitted
+  // them, so a delete+recreate (same name) leaves the resource's events referencing a
+  // stale uid and the tab would show "No events" even though `kubectl get events` lists
+  // them. Name + kind keeps events visible across recreations.
   <EventStream
-    fieldSelector={`involvedObject.uid=${uid},involvedObject.name=${name},involvedObject.kind=${kind}`}
+    fieldSelector={`involvedObject.name=${name},involvedObject.kind=${kind}`}
     namespace={namespace}
     resourceEventStream
   />

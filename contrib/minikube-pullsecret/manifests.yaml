@@ -1,0 +1,132 @@
+# Static resources for the pullsecret-webhook. Applied by deploy.sh, which ALSO
+# generates the serving cert (Secret pullsecret-webhook-tls) and creates the
+# MutatingWebhookConfiguration with the matching caBundle — those two are not
+# here because they carry generated TLS material.
+#
+# What this deploys:
+#   * A controller/webhook that associates ONE image pull secret with EVERY
+#     ServiceAccount in EVERY namespace, old and new (see main.go).
+#   * The reconciler ALSO replicates the source pull secret into every namespace
+#     (imagePullSecrets can only reference a same-namespace Secret).
+#
+# Tune SOURCE_NAMESPACE / SOURCE_SECRET on the Deployment below if your pull
+# secret lives elsewhere.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pullsecret-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: pullsecret-webhook
+  namespace: pullsecret-system
+---
+# Cluster-wide: read the source secret, replicate it into every namespace, and
+# patch every ServiceAccount. Deliberately broad because the feature targets ALL
+# namespaces (including kube-system).
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: pullsecret-webhook
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "watch", "create", "update"]
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: pullsecret-webhook
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: pullsecret-webhook
+subjects:
+  - kind: ServiceAccount
+    name: pullsecret-webhook
+    namespace: pullsecret-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: pullsecret-webhook
+  namespace: pullsecret-system
+  labels:
+    app: pullsecret-webhook
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: pullsecret-webhook
+  template:
+    metadata:
+      labels:
+        app: pullsecret-webhook
+    spec:
+      serviceAccountName: pullsecret-webhook
+      containers:
+        - name: webhook
+          image: pullsecret-webhook:minikube
+          imagePullPolicy: IfNotPresent
+          args: ["-v=2"]
+          env:
+            - name: SOURCE_NAMESPACE
+              value: "olm"
+            - name: SOURCE_SECRET
+              value: "1979710-adongre-pull-secret"
+            - name: RECONCILE_INTERVAL
+              value: "30s"
+          ports:
+            - containerPort: 8443
+              name: https
+          volumeMounts:
+            - name: tls
+              mountPath: /tls
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8443
+              scheme: HTTPS
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8443
+              scheme: HTTPS
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+      volumes:
+        - name: tls
+          secret:
+            secretName: pullsecret-webhook-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: pullsecret-webhook
+  namespace: pullsecret-system
+  labels:
+    app: pullsecret-webhook
+spec:
+  selector:
+    app: pullsecret-webhook
+  ports:
+    - name: https
+      port: 443
+      targetPort: 8443

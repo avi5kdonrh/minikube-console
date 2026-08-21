@@ -14,7 +14,7 @@ const MonitoringTab: FC<MonitoringTabProps> = ({ item }) => {
   const { monitoringAlerts } = item;
   const {
     kind,
-    metadata: { uid, name, namespace },
+    metadata: { name, namespace },
   } = item.obj;
   const { podData, loadError, loaded } = usePodsWatcher(item.obj, item.obj.kind, namespace);
 
@@ -27,7 +27,10 @@ const MonitoringTab: FC<MonitoringTabProps> = ({ item }) => {
         isList: true,
         kind: 'Event',
         namespace,
-        fieldSelector: `involvedObject.uid=${uid},involvedObject.name=${name},involvedObject.kind=${kind}`,
+        // Match on name + kind only (scoped by the namespaced endpoint). Omitting
+        // `involvedObject.uid` keeps events visible after a delete+recreate, whose old
+        // events would otherwise reference a stale uid and disappear from the tab.
+        fieldSelector: `involvedObject.name=${name},involvedObject.kind=${kind}`,
       },
     };
 
@@ -39,7 +42,7 @@ const MonitoringTab: FC<MonitoringTabProps> = ({ item }) => {
       };
     }
     return res;
-  }, [kind, uid, name, namespace, loaded, loadError, podData]);
+  }, [kind, name, namespace, loaded, loadError, podData]);
 
   const resources = useK8sWatchResources<Record<string, EventKind[]>>(watchResources);
 

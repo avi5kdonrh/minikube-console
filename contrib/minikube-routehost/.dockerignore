@@ -1,0 +1,6 @@
+# Keep the build context to just the Go sources + the Dockerfile.
+*
+!Dockerfile
+!go.mod
+!go.sum
+!main.go

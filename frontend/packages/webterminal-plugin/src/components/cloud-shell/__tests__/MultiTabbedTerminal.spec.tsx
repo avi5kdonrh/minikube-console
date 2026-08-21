@@ -16,8 +16,9 @@ jest.mock('@console/webterminal-plugin/src/components/cloud-shell/DetachedPodExe
   default: ({ sessionId }: { sessionId: string }) => `Detached ${sessionId}`,
 }));
 
+const mockUseFlag = jest.fn();
 jest.mock('@console/shared/src/hooks/useFlag', () => ({
-  useFlag: () => true,
+  useFlag: () => mockUseFlag(),
 }));
 
 const mockCleanup = jest.fn();
@@ -75,6 +76,8 @@ describe('MultiTabTerminal', () => {
   beforeEach(() => {
     mockUseDetachedSessions.mockReturnValue([]);
     mockCleanup.mockClear();
+    // Default to the Web Terminal Operator being available (OpenShift-like).
+    mockUseFlag.mockReturnValue(true);
   });
 
   it('should initially load with only one console', () => {
@@ -166,6 +169,20 @@ describe('MultiTabTerminal', () => {
       await user.click(closeBtns[1]);
 
       expect(mockCleanup).toHaveBeenCalledWith(detachedSessions[0].cleanup);
+    });
+
+    // Regression test for the blank detached terminal on clusters without the
+    // Web Terminal Operator (e.g. minikube): the drawer mounts *after* the first
+    // session exists, so the newly detached tab must still become the active tab.
+    it('selects the detached tab on first mount when the Web Terminal Operator is unavailable', () => {
+      mockUseFlag.mockReturnValue(false); // FLAG_DEVWORKSPACE off
+      mockUseDetachedSessions.mockReturnValue([detachedSessions[0]]);
+      renderWithProviders(<MultiTabbedTerminal />);
+
+      expect(screen.getByRole('tab', { name: 'my-pod/main' })).toHaveAttribute(
+        'aria-selected',
+        'true',
+      );
     });
   });
 

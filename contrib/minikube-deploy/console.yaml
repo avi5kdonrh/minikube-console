@@ -2,9 +2,12 @@
 # minikube. Applied by contrib/minikube-deploy/deploy.sh (which also builds the
 # two images into minikube's container runtime and sets the Route host).
 #
-# Access: minikube has no OpenShift router, so the Route below is created for the
-# console's own Routes UI but does NOT serve traffic. Reach the console via the
-# NodePort Service:  minikube service console -n console --url
+# Access, two ways:
+#   * Route (preferred):  http://console.<minikube-ip>.nip.io  — works because
+#     this cluster runs an OpenShift ingress-router (ns openshift-ingress) that
+#     admits route.openshift.io Routes. If you don't have that router, the Route
+#     won't serve traffic; use the NodePort instead.
+#   * NodePort Service:   minikube service console -n console --url
 ---
 apiVersion: v1
 kind: Namespace
@@ -181,10 +184,10 @@ spec:
       port: 8080
       targetPort: 8080
 ---
-# Created so the console's Routes UI has a Route to show and to satisfy the
-# route-based topology. NOTE: minikube has no router, so this does not actually
-# serve traffic; deploy.sh sets spec.host to console.<minikube-ip>.nip.io for a
-# meaningful display. Functional access is the NodePort Service (minikube service).
+# Exposes the console via the OpenShift ingress-router running on this cluster
+# (ns openshift-ingress, routerName "public"). deploy.sh sets spec.host to
+# console.<minikube-ip>.nip.io, which the router admits and serves. If a cluster
+# has no such router, this Route is inert — use the NodePort Service instead.
 apiVersion: route.openshift.io/v1
 kind: Route
 metadata:

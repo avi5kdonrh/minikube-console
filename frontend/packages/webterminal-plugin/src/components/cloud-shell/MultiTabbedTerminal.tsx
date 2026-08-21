@@ -32,7 +32,12 @@ export const MultiTabbedTerminal: FC<MultiTabbedTerminalProps> = ({ onClose }) =
   const fireTelemetryEvent = useTelemetry();
   const dispatch = useConsoleDispatch();
   const detachedSessions = useDetachedSessions();
-  const prevDetachedCountRef = useRef(detachedSessions.length);
+  // Start from 0 (not the current length) so the effect below detects sessions
+  // that already exist when this component first mounts. Without the Web Terminal
+  // Operator (e.g. plain Kubernetes) the drawer, and therefore this component,
+  // only mounts *after* the first detached session is added, so seeding this with
+  // the current length would make the effect miss it and leave no tab selected.
+  const prevDetachedCountRef = useRef(0);
 
   const tick = useCallback(
     () =>

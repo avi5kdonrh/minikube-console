@@ -1,34 +1,15 @@
-import type { FC, ComponentType, CSSProperties } from 'react';
-import { Component, useState, useCallback, useEffect } from 'react';
+import type { FC, ComponentType } from 'react';
+import { Component } from 'react';
 import { css } from '@patternfly/react-styles';
-import * as _ from 'lodash';
-import {
-  AutoSizer,
-  List as VirtualList,
-  WindowScroller,
-  CellMeasurer,
-  CellMeasurerCache,
-} from 'react-virtualized';
 import type { EventKind } from '../../module/k8s';
-import { WithScrollContainer } from './dom-utils';
 
 // Keep track of seen events so we only animate new ones.
 const seen = new Set();
 
-const measurementCache = new CellMeasurerCache({
-  fixedWidth: true,
-});
-
 class SysEvent extends Component<SysEventProps> {
   shouldComponentUpdate(nextProps: SysEventProps) {
-    if (this.props.event.lastTimestamp !== nextProps.event.lastTimestamp) {
-      // Timestamps can be modified because events can be combined.
-      return true;
-    }
-    if (_.isEqual(this.props.style, nextProps.style)) {
-      return false;
-    }
-    return true;
+    // Timestamps can be modified because events can be combined.
+    return this.props.event.lastTimestamp !== nextProps.event.lastTimestamp;
   }
 
   componentWillUnmount() {
@@ -37,7 +18,7 @@ class SysEvent extends Component<SysEventProps> {
   }
 
   render() {
-    const { EventComponent, index, style, event, className, list } = this.props;
+    const { EventComponent, index, event, className } = this.props;
 
     let shouldAnimate: boolean;
     const key = event.metadata.uid;
@@ -54,84 +35,39 @@ class SysEvent extends Component<SysEventProps> {
           'co-sysevent--transition',
           className,
         )}
-        style={style}
       >
-        <EventComponent event={event} list={list} cache={measurementCache} index={index} />
+        <EventComponent event={event} />
       </div>
     );
   }
 }
 
+// Render the event stream as a plain, non-virtualized list.
+//
+// The stream is bounded (see `maxMessages` in events.tsx), so windowing isn't
+// needed. The previous react-virtualized implementation relied on a
+// `WindowScroller` locating a scrollable ancestor that reported a non-zero
+// height; inside the resource detail-page Events tab that resolved to height 0
+// (no usable scroll container), so the list mounted zero rows and the tab
+// showed "Showing N events" above an empty list even though the events had
+// loaded.
 export const EventStreamList: FC<EventStreamListProps> = ({
   events,
   className,
   EventComponent,
-}) => {
-  const [list, setList] = useState(null);
-  const onResize = useCallback(() => measurementCache.clearAll(), []);
-  useEffect(() => {
-    onResize();
-    list?.recomputeRowHeights();
-  }, [list, events, onResize]);
-  const rowRenderer = useCallback(
-    ({ index, style, key, parent }) => (
-      <CellMeasurer
-        cache={measurementCache}
-        columnIndex={0}
-        key={key}
-        rowIndex={index}
-        parent={parent}
-      >
-        {({ measure }) => (
-          <SysEvent
-            className={className}
-            event={events[index]}
-            list={list}
-            EventComponent={EventComponent}
-            onLoad={measure}
-            // eslint-disable-next-line no-restricted-globals
-            onEntered={print}
-            key={key}
-            style={style}
-            index={index}
-          />
-        )}
-      </CellMeasurer>
-    ),
-    [events, className, EventComponent, list],
-  );
-
-  const renderVirtualizedTable = (scrollContainer) => (
-    <WindowScroller scrollElement={scrollContainer}>
-      {({ height, isScrolling, registerChild, onChildScroll, scrollTop }) => (
-        <AutoSizer disableHeight onResize={onResize}>
-          {({ width }) => (
-            <div ref={registerChild}>
-              <VirtualList
-                className="co-sysevent-slide-in"
-                autoHeight
-                data={events}
-                deferredMeasurementCache={measurementCache}
-                height={height || 0}
-                isScrolling={isScrolling}
-                onScroll={onChildScroll}
-                ref={setList}
-                rowCount={events.length}
-                rowHeight={measurementCache.rowHeight}
-                rowRenderer={rowRenderer}
-                scrollTop={scrollTop}
-                tabIndex={null}
-                width={width}
-              />
-            </div>
-          )}
-        </AutoSizer>
-      )}
-    </WindowScroller>
-  );
-
-  return events.length > 0 && <WithScrollContainer>{renderVirtualizedTable}</WithScrollContainer>;
-};
+}) => (
+  <>
+    {events.map((event, index) => (
+      <SysEvent
+        className={className}
+        event={event}
+        EventComponent={EventComponent}
+        index={index}
+        key={event.metadata.uid}
+      />
+    ))}
+  </>
+);
 
 type EventStreamListProps = {
   events: EventKind[];
@@ -141,18 +77,11 @@ type EventStreamListProps = {
 
 export type EventComponentProps = {
   event: EventKind;
-  list: VirtualList;
-  cache: CellMeasurerCache;
-  index: number;
 };
 
 type SysEventProps = {
   EventComponent: ComponentType<EventComponentProps>;
   event: EventKind;
-  onLoad: () => void;
-  onEntered: () => void;
-  style: CSSProperties;
   index: number;
   className?: string;
-  list: VirtualList;
 };

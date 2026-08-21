@@ -1,5 +1,12 @@
 import { useMemo, Suspense } from 'react';
-import { Grid, GridItem } from '@patternfly/react-core';
+import {
+  DescriptionList,
+  DescriptionListDescription,
+  DescriptionListGroup,
+  DescriptionListTerm,
+  Grid,
+  GridItem,
+} from '@patternfly/react-core';
 import { useTranslation } from 'react-i18next';
 import {
   ConsoleDataView,
@@ -9,6 +16,7 @@ import {
 } from '@console/app/src/components/data-view/ConsoleDataView';
 import { useColumnWidthSettings } from '@console/app/src/components/data-view/useResizableColumnProps';
 import { LazyActionMenu } from '@console/shared/src/components/actions/LazyActionMenu';
+import { ActionMenuVariant } from '@console/shared/src/components/actions/types';
 import { Timestamp } from '@console/shared/src/components/datetime/Timestamp';
 import PaneBody from '@console/shared/src/components/layout/PaneBody';
 import { DASH } from '@console/shared/src/constants/ui';
@@ -70,8 +78,19 @@ const getDataViewRows = (data, columns) =>
     });
   });
 
+const SecretRefList = ({ refs, namespace, emptyText }) => {
+  if (!refs || refs.length === 0) {
+    return <span className="pf-v6-u-color-200">{emptyText}</span>;
+  }
+  return refs.map(({ name }) => (
+    <ResourceLink key={name} kind="Secret" name={name} namespace={namespace} />
+  ));
+};
+
 const Details = ({ obj: serviceaccount }) => {
   const { t } = useTranslation('public');
+  const { imagePullSecrets, secrets } = serviceaccount;
+  const { namespace } = serviceaccount.metadata;
 
   return (
     <PaneBody>
@@ -79,6 +98,30 @@ const Details = ({ obj: serviceaccount }) => {
       <Grid hasGutter>
         <GridItem md={6}>
           <ResourceSummary resource={serviceaccount} />
+        </GridItem>
+        <GridItem md={6}>
+          <DescriptionList>
+            <DescriptionListGroup>
+              <DescriptionListTerm>{t('Image pull secrets')}</DescriptionListTerm>
+              <DescriptionListDescription>
+                <SecretRefList
+                  refs={imagePullSecrets}
+                  namespace={namespace}
+                  emptyText={t('No image pull secrets')}
+                />
+              </DescriptionListDescription>
+            </DescriptionListGroup>
+            <DescriptionListGroup>
+              <DescriptionListTerm>{t('Mountable secrets')}</DescriptionListTerm>
+              <DescriptionListDescription>
+                <SecretRefList
+                  refs={secrets}
+                  namespace={namespace}
+                  emptyText={t('No mountable secrets')}
+                />
+              </DescriptionListDescription>
+            </DescriptionListGroup>
+          </DescriptionList>
         </GridItem>
       </Grid>
     </PaneBody>
@@ -89,6 +132,12 @@ const ServiceAccountsDetailsPage = (props) => (
   <DetailsPage
     {...props}
     kind={serviceAccountReference}
+    customActionMenu={(_kindModel, obj) => (
+      <LazyActionMenu
+        context={{ [serviceAccountReference]: obj }}
+        variant={ActionMenuVariant.DROPDOWN}
+      />
+    )}
     pages={[navFactory.details(Details), navFactory.editYaml()]}
   />
 );

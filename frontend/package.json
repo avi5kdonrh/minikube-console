@@ -112,7 +112,7 @@
     "marked": "^15.0.6",
     "mobx": "^6.9.0",
     "mobx-react": "^7.6.0",
-    "monaco-editor": "^0.51.0",
+    "monaco-editor": "^0.54.0",
     "monaco-yaml": "^5.5.1",
     "murmurhash-js": "1.0.x",
     "pkijs": "^2.1.90",

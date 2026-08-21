@@ -125,11 +125,11 @@ export const useCSPViolationDetector = () => {
         const pluginIsLoaded = validPlugin && pluginInfo.status === 'loaded';
 
         // eslint-disable-next-line no-console
-        console.warn(
+        /* console.warn(
           `Content Security Policy violation seems to originate from ${
             validPlugin ? `plugin ${pluginName}` : `unknown plugin ${pluginName}`
           }`,
-        );
+        ); */
 
         if (validPlugin) {
           dispatch(setPluginCSPViolations(pluginName, true));

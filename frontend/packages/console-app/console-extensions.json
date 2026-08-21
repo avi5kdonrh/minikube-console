@@ -316,6 +316,16 @@
     "type": "console.action/resource-provider",
     "properties": {
       "model": {
+        "version": "v1",
+        "kind": "ServiceAccount"
+      },
+      "provider": { "$codeRef": "serviceAccountProvider.useServiceAccountActionsProvider" }
+    }
+  },
+  {
+    "type": "console.action/resource-provider",
+    "properties": {
+      "model": {
         "group": "apps",
         "version": "v1",
         "kind": "Deployment"
@@ -1046,7 +1056,22 @@
         "kind": "Project"
       }
     },
-    "flags": { "required": ["OPENSHIFT"] }
+    "flags": { "required": ["OPENSHIFT_PROJECT"] }
+  },
+  {
+    "type": "console.navigation/resource-cluster",
+    "properties": {
+      "perspective": "admin",
+      "section": "home",
+      "id": "namespaces-home",
+      "insertAfter": "dashboards",
+      "name": "%console-app~Namespaces%",
+      "model": {
+        "version": "v1",
+        "kind": "Namespace"
+      }
+    },
+    "flags": { "disallowed": ["OPENSHIFT_PROJECT"] }
   },
   {
     "type": "console.navigation/href",

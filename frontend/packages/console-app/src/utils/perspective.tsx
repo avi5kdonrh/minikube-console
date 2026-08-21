@@ -12,9 +12,12 @@ export const getLandingPageURL: ResolvedExtension<Perspective>['properties']['la
   if (!flags[FLAGS.OPENSHIFT]) {
     return '/search';
   }
-  return flags[FLAGS.CAN_LIST_NS] && flags[FLAGS.MONITORING]
-    ? '/dashboards'
-    : '/k8s/cluster/projects';
+  if (flags[FLAGS.CAN_LIST_NS] && flags[FLAGS.MONITORING]) {
+    return '/dashboards';
+  }
+  // The Project API (project.openshift.io) is only served by the OpenShift apiserver; on a
+  // cluster without it (e.g. plain Kubernetes) fall back to the Namespaces list instead.
+  return flags.OPENSHIFT_PROJECT ? '/k8s/cluster/projects' : '/k8s/cluster/namespaces';
 };
 
 export const getImportRedirectURL: ResolvedExtension<Perspective>['properties']['importRedirectURL'] =

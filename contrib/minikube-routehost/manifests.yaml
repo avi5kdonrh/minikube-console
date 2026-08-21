@@ -1,0 +1,122 @@
+# Static resources for the routehost-webhook. Applied by deploy.sh, which ALSO
+# generates the serving cert (Secret routehost-webhook-tls) and creates the
+# MutatingWebhookConfiguration with the matching caBundle — those two are not
+# here because they carry generated TLS material.
+#
+# What this deploys:
+#   * A webhook + reconciler that sets .spec.host on any OpenShift Route that is
+#     missing one, using a deterministic host "<name>.<namespace>.<BASE_DOMAIN>"
+#     (see main.go). It never touches a Route that already has a host.
+#
+# Tune BASE_DOMAIN on the Deployment below (default "minikube") to match your
+# wildcard DNS (e.g. dnsmasq resolving *.minikube to the ingress IP).
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: routehost-system
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: routehost-webhook
+  namespace: routehost-system
+---
+# Cluster-wide: list every Route and patch the host-less ones. Deliberately
+# broad because the feature targets Routes in ALL namespaces.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: routehost-webhook
+rules:
+  - apiGroups: ["route.openshift.io"]
+    resources: ["routes"]
+    verbs: ["get", "list", "watch", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: routehost-webhook
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: routehost-webhook
+subjects:
+  - kind: ServiceAccount
+    name: routehost-webhook
+    namespace: routehost-system
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: routehost-webhook
+  namespace: routehost-system
+  labels:
+    app: routehost-webhook
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: routehost-webhook
+  template:
+    metadata:
+      labels:
+        app: routehost-webhook
+    spec:
+      serviceAccountName: routehost-webhook
+      containers:
+        - name: webhook
+          image: routehost-webhook:minikube
+          imagePullPolicy: IfNotPresent
+          args: ["-v=2"]
+          env:
+            - name: BASE_DOMAIN
+              value: "minikube"
+            - name: RECONCILE_INTERVAL
+              value: "30s"
+          ports:
+            - containerPort: 8443
+              name: https
+          volumeMounts:
+            - name: tls
+              mountPath: /tls
+              readOnly: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8443
+              scheme: HTTPS
+            initialDelaySeconds: 3
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8443
+              scheme: HTTPS
+            initialDelaySeconds: 10
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+      volumes:
+        - name: tls
+          secret:
+            secretName: routehost-webhook-tls
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: routehost-webhook
+  namespace: routehost-system
+  labels:
+    app: routehost-webhook
+spec:
+  selector:
+    app: routehost-webhook
+  ports:
+    - name: https
+      port: 443
+      targetPort: 8443
